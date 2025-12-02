@@ -13,11 +13,10 @@ export const fetchPortfolioForFund = async (fundName: string): Promise<Portfolio
     const model = "gemini-2.5-flash";
     
     // We ask Gemini to search and then structure the data.
-    // Updated prompt to be more exhaustive and less focused only on "recent" to catch older investments like IVIC.
     const prompt = `
       Find the comprehensive list of portfolio companies for the Venture Capital fund "${fundName}".
       Use Google Search to find their official portfolio page, Crunchbase listing, or reputable news sources.
-      List ALL active portfolio companies you can find, not just the most recent ones.
+      List ALL active portfolio companies you can find.
       Try to capture the full list.
     `;
 
@@ -26,8 +25,6 @@ export const fetchPortfolioForFund = async (fundName: string): Promise<Portfolio
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        // We do not use JSON schema here because it conflicts with Search Tool sometimes in specific payload combinations.
-        // Instead we ask for a structured text or simple JSON in the text and parse it.
         systemInstruction: `You are a research assistant. You must output the list of companies in a valid JSON array format at the end of your response. 
         Example format: [{"name": "Company A", "description": "Short description"}, {"name": "Company B"}]
         Do not use markdown code blocks like \`\`\`json. Just the raw JSON array string.`
@@ -37,7 +34,6 @@ export const fetchPortfolioForFund = async (fundName: string): Promise<Portfolio
     const text = response.text || "";
     
     // Attempt to extract JSON from the response text
-    // Regex to find array brackets matches
     const jsonMatch = text.match(/\[.*\]/s);
     
     if (jsonMatch) {
@@ -49,9 +45,9 @@ export const fetchPortfolioForFund = async (fundName: string): Promise<Portfolio
       }));
     }
 
-    // Fallback if JSON parsing fails, try to split by newlines if it looks like a list
+    // Fallback if JSON parsing fails
     const lines = text.split('\n').filter(line => line.trim().length > 0 && !line.includes('[') && !line.includes(']'));
-    return lines.slice(0, 30).map(l => ({ name: l.replace(/^- /, '').trim() })); // increased fallback limit
+    return lines.slice(0, 30).map(l => ({ name: l.replace(/^- /, '').trim() }));
 
   } catch (error) {
     console.error("Error fetching portfolio:", error);
@@ -60,8 +56,8 @@ export const fetchPortfolioForFund = async (fundName: string): Promise<Portfolio
 };
 
 /**
- * Uses Gemini to fuzzy match a client list against a specific fund's portfolio.
- * Handles Hebrew/English, Inc/Ltd, brand vs legal names, and tricky punctuation (I.v.i.c vs IVIC).
+ * Uses Gemini to match client list against a specific fund's portfolio.
+ * Reverted to a balanced prompt to avoid over-matching.
  */
 export const findMatches = async (
   fundName: string,
@@ -80,23 +76,14 @@ export const findMatches = async (
     
     Portfolio Companies: [${portfolioNames}]
     
-    Task: Identify which of my Clients are likely the same entity as a Portfolio Company using advanced fuzzy matching.
+    Task: Identify which of my Clients are the same entity as a Portfolio Company.
     
-    CRITICAL MATCHING RULES:
-    1. **Fuzzy Name Matching**: Detect matches despite misspellings, typos, or character swaps.
-       - Example: "Goolge" == "Google", "Sofware" == "Software", "Nvidiaa" == "Nvidia".
-    2. **Legal Suffix Handling**: Completely ignore legal entity suffixes (Inc, Ltd, GmbH, L.P., Corp, etc.) when comparing.
-       - Example: "Wiz Inc." == "Wiz", "Monday Ltd" == "monday.com", "Apple GmbH" == "Apple".
-    3. **Acronyms & Punctuation**: You MUST match variations with and without dots/hyphens/spaces. 
-       - Example: "I.v.i.c" == "IVIC", "A.B.C" == "ABC", "T-Mobile" == "TMobile".
-    4. **Cross-Language Matching**: Handle Hebrew/English equivalents and transliterations.
-       - Example: "וויז" == "Wiz", "רפאל" == "Rafael".
-    5. **Brand vs Legal**: Match subsidiary or legal names to the main brand name.
-       - Example: "Facebook Israel Ltd" == "Meta", "Google Israel" == "Alphabet".
+    Instructions:
+    1. Check for exact matches and obvious variations (e.g., "Monday" vs "monday.com", "Wiz" vs "Wiz Inc").
+    2. Handle Hebrew/English translations (e.g., "רפאל" vs "Rafael").
+    3. Do NOT force a match if the names are significantly different. Accuracy is more important than quantity.
     
-    If there is a strong phonetic similarity or clear corporate relationship, mark it as a match.
-    
-    Return a JSON array of matches.
+    Return a JSON array of matches only.
   `;
 
   const responseSchema: Schema = {
@@ -120,7 +107,7 @@ export const findMatches = async (
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-        temperature: 0.1 // Low temperature for factual matching
+        temperature: 0.1
       }
     });
 

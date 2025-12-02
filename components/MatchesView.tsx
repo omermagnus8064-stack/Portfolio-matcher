@@ -12,18 +12,30 @@ const MatchesView: React.FC<Props> = ({ clients, funds }) => {
   const [matches, setMatches] = useState<MatchResult[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [hasRun, setHasRun] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentStatus, setCurrentStatus] = useState('');
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
     setMatches([]);
+    setProgress(0);
     
     const allMatches: MatchResult[] = [];
+    const fundsWithData = funds.filter(f => f.portfolio.length > 0);
+    const total = fundsWithData.length;
+    let completed = 0;
     
-    // Analyze each fund sequentially to avoid hitting rate limits too hard if multiple funds
-    for (const fund of funds) {
-        if (fund.portfolio.length === 0) continue;
-        const fundMatches = await findMatches(fund.name, clients, fund.portfolio);
-        allMatches.push(...fundMatches);
+    // Analyze each fund sequentially
+    for (const fund of fundsWithData) {
+        setCurrentStatus(`Analyzing ${fund.name}...`);
+        try {
+            const fundMatches = await findMatches(fund.name, clients, fund.portfolio);
+            allMatches.push(...fundMatches);
+        } catch (e) {
+            console.error(e);
+        }
+        completed++;
+        setProgress(Math.round((completed / total) * 100));
     }
     
     setMatches(allMatches);
@@ -52,14 +64,13 @@ const MatchesView: React.FC<Props> = ({ clients, funds }) => {
             <p className="text-slate-600 mb-8">
               The AI will cross-reference your <span className="font-semibold text-blue-600">{clients.length} Clients</span> against 
               the portfolios of <span className="font-semibold text-indigo-600">{fundsWithData} Funds</span>.
-              It handles name variations (Hebrew/English) automatically.
             </p>
             <button
               onClick={runAnalysis}
               className="inline-flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg transform hover:-translate-y-0.5 transition-all font-semibold text-lg"
             >
               <Sparkles className="w-5 h-5" />
-              Analyze Overlaps
+              Start Analysis
             </button>
           </div>
         </div>
@@ -67,9 +78,21 @@ const MatchesView: React.FC<Props> = ({ clients, funds }) => {
 
       {isAnalyzing && (
         <div className="bg-white p-12 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center justify-center">
-          <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
-          <h3 className="text-xl font-semibold text-slate-800">Analyzing Connections...</h3>
-          <p className="text-slate-500 mt-2">Comparing names, resolving entities, and checking Hebrew/English aliases.</p>
+          <div className="w-full max-w-md mb-6">
+             <div className="flex justify-between text-sm text-slate-600 mb-2">
+                 <span>{currentStatus}</span>
+                 <span className="font-semibold">{progress}%</span>
+             </div>
+             <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                <div 
+                    className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out" 
+                    style={{ width: `${progress}%` }}
+                ></div>
+             </div>
+          </div>
+          
+          <Loader2 className="w-8 h-8 text-indigo-400 animate-spin mb-2" />
+          <p className="text-slate-400 text-sm">Comparing entities and checking Hebrew/English aliases...</p>
         </div>
       )}
 
