@@ -80,14 +80,21 @@ export const findMatches = async (
     
     Portfolio Companies: [${portfolioNames}]
     
-    Task: Identify which of my Clients are likely the same entity as a Portfolio Company.
+    Task: Identify which of my Clients are likely the same entity as a Portfolio Company using advanced fuzzy matching.
     
     CRITICAL MATCHING RULES:
-    1. **Acronyms & Punctuation**: You MUST match variations with and without dots/hyphens. Example: "I.v.i.c" === "IVIC", "A.B.C" === "ABC", "T-Mobile" === "TMobile".
-    2. **Language**: Handle Hebrew/English equivalents (e.g. "Wiz" == "וויז").
-    3. **Legal vs Brand**: Handle legal names vs brand names (e.g. "Facebook Israel Ltd" == "Meta").
-    4. **Corporate Suffixes**: Ignore common suffixes like Ltd, Inc, GmbH, L.P.
-    5. **Typos**: Handle slight variations or phonetic misspellings.
+    1. **Fuzzy Name Matching**: Detect matches despite misspellings, typos, or character swaps.
+       - Example: "Goolge" == "Google", "Sofware" == "Software", "Nvidiaa" == "Nvidia".
+    2. **Legal Suffix Handling**: Completely ignore legal entity suffixes (Inc, Ltd, GmbH, L.P., Corp, etc.) when comparing.
+       - Example: "Wiz Inc." == "Wiz", "Monday Ltd" == "monday.com", "Apple GmbH" == "Apple".
+    3. **Acronyms & Punctuation**: You MUST match variations with and without dots/hyphens/spaces. 
+       - Example: "I.v.i.c" == "IVIC", "A.B.C" == "ABC", "T-Mobile" == "TMobile".
+    4. **Cross-Language Matching**: Handle Hebrew/English equivalents and transliterations.
+       - Example: "וויז" == "Wiz", "רפאל" == "Rafael".
+    5. **Brand vs Legal**: Match subsidiary or legal names to the main brand name.
+       - Example: "Facebook Israel Ltd" == "Meta", "Google Israel" == "Alphabet".
+    
+    If there is a strong phonetic similarity or clear corporate relationship, mark it as a match.
     
     Return a JSON array of matches.
   `;
